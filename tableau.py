@@ -76,6 +76,16 @@ def lhs(fmla: str) -> str:
 
 # Return the connective symbol of a binary connective formula
 def con(fmla: str) -> str:
+    depth = 0
+    for i, char in enumerate(fmla):
+        if char == '(':
+            depth += 1
+        elif char == ')':
+            depth -= 1
+        if depth == 1:
+            if fmla[i:i+2] in (['/','\\'], ['\\','/'], ['=','>']):
+                con = fmla[i:i+2]
+                return con
     return ''
 
 # Return the RHS symbol of a binary connective formula
