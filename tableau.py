@@ -70,16 +70,26 @@ def lhs(fmla: str) -> str:
             depth -= 1
         if depth == 1:
             if fmla[i:i+2] in (['/','\\'], ['\\','/'], ['=','>']):
-                left_fmla = ''.join(fmla[:i])
+                left_fmla = fmla[1:i]
                 return left_fmla
     return ''
 
 # Return the connective symbol of a binary connective formula
-def con(fmla):
+def con(fmla: str) -> str:
     return ''
 
 # Return the RHS symbol of a binary connective formula
-def rhs(fmla):
+def rhs(fmla: str) -> str:
+    depth = 0
+    for i, char in enumerate(fmla):
+        if char == '(':
+            depth += 1
+        elif char == ')':
+            depth -= 1
+        if depth == 1:
+            if fmla[i:i+2] in (['/','\\'], ['\\','/'], ['=','>']):
+                right_fmla = fmla[i+2:-1]
+                return right_fmla
     return ''
 
 # You may choose to represent a theory as a set or a list
