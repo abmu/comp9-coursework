@@ -1,6 +1,6 @@
 MAX_CONSTANTS = 10
 
-# Parse a formula, consult parseOutputs for return values.
+# Parse a formula, consult parseOutputs for return values
 def parse(fmla: str) -> int:
     match list(fmla):
         case [('P' | 'Q' | 'R' | 'S'), '(', ('x' | 'y' | 'z' | 'w'), ',', ('x' | 'y' | 'z' | 'w'), ')']:
@@ -88,7 +88,7 @@ def con(fmla: str) -> str:
                 return con
     return ''
 
-# Return the RHS symbol of a binary connective formula
+# Return the RHS of a binary connective formula
 def rhs(fmla: str) -> str:
     depth = 0
     for i, char in enumerate(fmla):
@@ -103,13 +103,46 @@ def rhs(fmla: str) -> str:
     return ''
 
 # You may choose to represent a theory as a set or a list
-def theory(fmla):#initialise a theory with a single formula in it
-    return None
+# Initialise a theory with a single formula in it
+def theory(fmla: str) -> set[str]:
+    return {fmla}
 
-#check for satisfiability
-def sat(tableau):
-#output 0 if not satisfiable, output 1 if satisfiable, output 2 if number of constants exceeds MAX_CONSTANTS
+# Check for satisfiability - output 0 if not satisfiable, output 1 if satisfiable, output 2 if number of constants exceeds MAX_CONSTANTS
+def sat(tableau: list[set[str]]) -> int:
+    while tableau:
+        theory = tableau.pop(0)
+        if _is_expanded(theory) and not _is_contradictory(theory):
+            return 1
+        else:
+            # Pick non-literal formula in theory (must use fair schedule)
+            for fmla in theory:
+                if not _is_literal(fmla):
+                    break
+            match fmla:
+                case:
     return 0
+
+def _is_literal(fmla: str) -> bool:
+    output_index = parse(fmla)
+    if output_index in (1,6): # an atom or proposition
+        return True
+    elif output_index in (2,7): # a negation of FOL or propositional formula
+        sub_fmla = fmla[1:]
+        sub_fmla_output_index = parse(sub_fmla)
+        return sub_fmla_output_index in (1,6)
+    return False
+
+def _is_expanded(theory: set[str]) -> bool:
+    for fmla in theory:
+        if not _is_literal(fmla):
+            return False
+    return True
+
+def _is_contradictory(theory: set[str]) -> bool:
+    for fmla in theory:
+        if f'~{fmla}' in theory:
+            return True
+    return False
 
 #------------------------------------------------------------------------------------------------------------------------------:
 #                   DO NOT MODIFY THE CODE BELOW. MODIFICATION OF THE CODE BELOW WILL RESULT IN A MARK OF 0!                   :
