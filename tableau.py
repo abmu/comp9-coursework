@@ -20,14 +20,14 @@ def parse(fmla: str) -> int:
                 # a negation of a propositional formula
                 return 7
             return 0
-        case ['E', ('x' | 'y' | 'z' | 'w'), *chars]:
+        case ['A', ('x' | 'y' | 'z' | 'w'), *chars]:
             # a universally quantified formula
             sub_fmla = ''.join(chars)
             sub_fmla_output_index = parse(sub_fmla)
             if 1 <= sub_fmla_output_index <= 5:
                 return 3
             return 0
-        case ['A', ('x' | 'y' | 'z' | 'w'), *chars]:
+        case ['E', ('x' | 'y' | 'z' | 'w'), *chars]:
             # an existentially quantified formula
             sub_fmla = ''.join(chars)
             sub_fmla_output_index = parse(sub_fmla)
@@ -44,14 +44,14 @@ def parse(fmla: str) -> int:
                     depth -= 1
                 if depth == 1:
                     if i + 2 < len(chars) and chars[i:i+2] in (['/','\\'], ['\\','/'], ['=','>']):
-                        left_fmla = ''.join(chars[:i])
-                        left_fmla_output_index = parse(left_fmla)
-                        right_fmla = ''.join(chars[i+2:])
-                        right_fmla_output_index = parse(right_fmla)
-                        if 1 <= left_fmla_output_index <= 5 and 1 <= right_fmla_output_index <= 5:
+                        lhs_fmla = ''.join(chars[:i])
+                        lhs_fmla_output_index = parse(lhs_fmla)
+                        rhs_fmla = ''.join(chars[i+2:])
+                        rhs_fmla_output_index = parse(rhs_fmla)
+                        if 1 <= lhs_fmla_output_index <= 5 and 1 <= rhs_fmla_output_index <= 5:
                             # a binary connective first order formula
                             return 5
-                        if 6 <= left_fmla_output_index <= 8 and 6 <= right_fmla_output_index <= 8:
+                        if 6 <= lhs_fmla_output_index <= 8 and 6 <= rhs_fmla_output_index <= 8:
                             # a binary connective propositional formula
                             return 8
                         return 0
@@ -69,9 +69,9 @@ def lhs(fmla: str) -> str:
         elif char == ')':
             depth -= 1
         if depth == 1:
-            if fmla[i:i+2] in (['/','\\'], ['\\','/'], ['=','>']):
-                left_fmla = fmla[1:i]
-                return left_fmla
+            if fmla[i:i+2] in ('/\\', '\\/', '=>'):
+                lhs_fmla = fmla[1:i]
+                return lhs_fmla
     return ''
 
 # Return the connective symbol of a binary connective formula
@@ -83,7 +83,7 @@ def con(fmla: str) -> str:
         elif char == ')':
             depth -= 1
         if depth == 1:
-            if fmla[i:i+2] in (['/','\\'], ['\\','/'], ['=','>']):
+            if fmla[i:i+2] in ('/\\', '\\/', '=>'):
                 con = fmla[i:i+2]
                 return con
     return ''
@@ -97,9 +97,9 @@ def rhs(fmla: str) -> str:
         elif char == ')':
             depth -= 1
         if depth == 1:
-            if fmla[i:i+2] in (['/','\\'], ['\\','/'], ['=','>']):
-                right_fmla = fmla[i+2:-1]
-                return right_fmla
+            if fmla[i:i+2] in ('/\\', '\\/', '=>'):
+                rhs_fmla = fmla[i+2:-1]
+                return rhs_fmla
     return ''
 
 # You may choose to represent a theory as a set or a list
@@ -118,8 +118,29 @@ def sat(tableau: list[set[str]]) -> int:
             for fmla in theory:
                 if not _is_literal(fmla):
                     break
-            match fmla:
-                case:
+            if _is_literal(fmla):
+                continue
+            expansion_type, fmla_1, fmla_2 = _expand_fmla(fmla)
+            match expansion_type:
+                case 'alpha':
+                    new_theory = theory.copy()
+                    new_theory.remove(fmla)
+                    new_theory.add(fmla_1)
+                    if fmla_2 != '':
+                        new_theory.add(fmla_2)
+                    if not _is_contradictory(new_theory) and new_theory not in tableau:
+                        tableau.append(new_theory)
+                case 'beta':
+                    new_theory_1 = theory.copy()
+                    new_theory_1.remove(fmla)
+                    new_theory_1.add(fmla_1)
+                    if not _is_contradictory(new_theory_1) and new_theory_1 not in tableau:
+                        tableau.append(new_theory_1)
+                    new_theory_2 = theory.copy()
+                    new_theory_2.remove(fmla)
+                    new_theory_2.add(fmla_2)
+                    if not _is_contradictory(new_theory_2) and new_theory_2 not in tableau:
+                        tableau.append(new_theory_2)
     return 0
 
 def _is_literal(fmla: str) -> bool:
@@ -143,6 +164,36 @@ def _is_contradictory(theory: set[str]) -> bool:
         if f'~{fmla}' in theory:
             return True
     return False
+
+def _expand_fmla(fmla: str) -> tuple[str, str, str]:
+    output_index = parse(fmla)
+    if output_index in [5,8]: # a binary connective first order or propositional formula
+        lhs_fmla = lhs(fmla)
+        fmla_con = con(fmla)
+        rhs_fmla = rhs(fmla)
+        if fmla_con == '/\\':
+            return 'alpha', lhs_fmla, rhs_fmla
+        elif fmla_con == '\\/':
+            return 'beta', lhs_fmla, rhs_fmla
+        elif fmla_con == '=>':
+            return 'beta', f'~{lhs_fmla}', rhs_fmla
+    elif output_index in [2,7]: # a negation of FOL or propositional formula
+        sub_fmla = fmla[1:]
+        sub_fmla_output_index = parse(sub_fmla)
+        if sub_fmla_output_index in [2,7]:
+            return 'alpha', sub_fmla[1:], ''
+        elif sub_fmla_output_index in [5,8]:
+            lhs_sub_fmla = lhs(sub_fmla)
+            sub_fmla_con = con(sub_fmla)
+            rhs_sub_fmla = rhs(sub_fmla)
+            if sub_fmla_con == '\\/':
+                return 'alpha', f'~{lhs_sub_fmla}', f'~{rhs_sub_fmla}'
+            elif sub_fmla_con == '=>':
+                return 'alpha', lhs_sub_fmla, f'~{rhs_sub_fmla}'
+            elif sub_fmla_con == '/\\':
+                return 'beta', f'~{lhs_sub_fmla}', f'~{rhs_sub_fmla}'
+    return '', '', ''
+
 
 #------------------------------------------------------------------------------------------------------------------------------:
 #                   DO NOT MODIFY THE CODE BELOW. MODIFICATION OF THE CODE BELOW WILL RESULT IN A MARK OF 0!                   :
