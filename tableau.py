@@ -184,6 +184,27 @@ def _is_contradictory(theory: set[str]) -> bool:
             return True
     return False
 
+def _replace_var(fmla: str, var: str, const: str) -> str:
+    new_fmla = fmla[2:]
+    ignore = False
+    depth = 0
+    for i, char in enumerate(new_fmla):
+        if char in ('A', 'E') and new_fmla[i+1] == var:
+            ignore = True
+            continue
+        if not ignore:
+            if char == var:
+                new_fmla = new_fmla[:i] + const + new_fmla[i+1:]
+        else:
+            if char == '(':
+                depth += 1
+            elif char == ')':
+                depth -= 1
+            if depth == 0:
+                if i + 2 <= len(new_fmla) and new_fmla[i:i+2] in ('/\\', '\\/', '=>'):
+                    ignore = False
+    return new_fmla
+
 def _expand_fmla(fmla: str, consts: list[str]) -> tuple[str, str, str]:
     output_index = parse(fmla)
     if output_index in (2,7): # a negation of first order logic or propositional formula
@@ -192,16 +213,12 @@ def _expand_fmla(fmla: str, consts: list[str]) -> tuple[str, str, str]:
         if sub_fmla_output_index in (2,7):
             return 'alpha', sub_fmla[1:], ''
         elif output_index == 3:
-            ... FIX DELTA FORMULA EXPANSION WHEN THERE ARE DUPLICATE VARIABLES USED
             var = fmla[1]
             try:
                 const = consts.pop(0)
             except IndexError:
                 raise NoConstsException(f"Ran out of constants. (Max {MAX_CONSTANTS})")
-            new_fmla = fmla[2:]
-            for i, char in enumerate(new_fmla):
-                if char == var and new_fmla[i-1] not in ('A', 'E'):
-                    new_fmla = new_fmla[:i] + const + new_fmla[i+1:]
+            new_fmla = _replace_var(fmla, var, const)
             return 'delta', f'~{new_fmla}', ''
         elif output_index == 4:
             pass
@@ -223,10 +240,7 @@ def _expand_fmla(fmla: str, consts: list[str]) -> tuple[str, str, str]:
             const = consts.pop(0)
         except IndexError:
             raise NoConstsException(f"Ran out of constants. (Max {MAX_CONSTANTS})")
-        new_fmla = fmla[2:]
-        for i, char in enumerate(new_fmla):
-            if char == var and new_fmla[i-1] not in ('A', 'E'):
-                new_fmla = new_fmla[:i] + const + new_fmla[i+1:]
+        new_fmla = _replace_var(fmla, var, const)
         return 'delta', new_fmla, ''
     elif output_index in (5,8): # a binary connective first order logic or propositional formula
         lhs_fmla = lhs(fmla)
