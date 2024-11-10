@@ -1,9 +1,15 @@
 MAX_CONSTANTS = 10
+CONSTS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
+
+class NoConstsException(Exception):
+    pass
 
 # Parse a formula, consult parseOutputs for return values
+# Index 1-5 first order logic formula
+# Index 6-8 propositional formula
 def parse(fmla: str) -> int:
     match list(fmla):
-        case [('P' | 'Q' | 'R' | 'S'), '(', ('x' | 'y' | 'z' | 'w'), ',', ('x' | 'y' | 'z' | 'w'), ')']:
+        case [('P' | 'Q' | 'R' | 'S'), '(', x, ',', y, ')'] if x in {'x', 'y', 'z', 'w'} | set(CONSTS) and y in {'x', 'y', 'z', 'w'} | set(CONSTS):
             # an atom
             return 1
         case [('p' | 'q' | 'r' | 's')]:
@@ -35,7 +41,7 @@ def parse(fmla: str) -> int:
                 return 4
             return 0
         case ['(', *chars, ')']:
-            # a binary connective first order or propositional formula
+            # a binary connective first order logic or propositional formula
             depth = 1
             for i, char in enumerate(chars):
                 if char == '(':
@@ -49,7 +55,7 @@ def parse(fmla: str) -> int:
                         rhs_fmla = ''.join(chars[i+2:])
                         rhs_fmla_output_index = parse(rhs_fmla)
                         if 1 <= lhs_fmla_output_index <= 5 and 1 <= rhs_fmla_output_index <= 5:
-                            # a binary connective first order formula
+                            # a binary connective first order logic formula
                             return 5
                         if 6 <= lhs_fmla_output_index <= 8 and 6 <= rhs_fmla_output_index <= 8:
                             # a binary connective propositional formula
@@ -109,18 +115,25 @@ def theory(fmla: str) -> set[str]:
 
 # Check for satisfiability - output 0 if not satisfiable, output 1 if satisfiable, output 2 if number of constants exceeds MAX_CONSTANTS
 def sat(tableau: list[set[str]]) -> int:
+    consts = CONSTS.copy()
     while tableau:
         theory = tableau.pop(0)
         if _is_expanded(theory) and not _is_contradictory(theory):
             return 1
         else:
             # Pick non-literal formula in theory (must use fair schedule)
+            # !!!
+            # ENSURE THIS SCHEDULE WORKS WITH GAMMA FORMULAS
+            # !!!
             for fmla in theory:
                 if not _is_literal(fmla):
                     break
             if _is_literal(fmla):
                 continue
-            expansion_type, fmla_1, fmla_2 = _expand_fmla(fmla)
+            try:
+                expansion_type, fmla_1, fmla_2 = _expand_fmla(fmla, consts)
+            except NoConstsException:
+                return 2
             match expansion_type:
                 case 'alpha':
                     new_theory = theory.copy()
@@ -141,13 +154,19 @@ def sat(tableau: list[set[str]]) -> int:
                     new_theory_2.add(fmla_2)
                     if not _is_contradictory(new_theory_2) and new_theory_2 not in tableau:
                         tableau.append(new_theory_2)
+                case 'delta':
+                    new_theory = theory.copy()
+                    new_theory.remove(fmla)
+                    new_theory.add(fmla_1)
+                    if not _is_contradictory(new_theory) and new_theory not in tableau:
+                        tableau.append(new_theory)
     return 0
 
 def _is_literal(fmla: str) -> bool:
     output_index = parse(fmla)
     if output_index in (1,6): # an atom or proposition
         return True
-    elif output_index in (2,7): # a negation of FOL or propositional formula
+    elif output_index in (2,7): # a negation of first order logic or propositional formula
         sub_fmla = fmla[1:]
         sub_fmla_output_index = parse(sub_fmla)
         return sub_fmla_output_index in (1,6)
@@ -165,24 +184,27 @@ def _is_contradictory(theory: set[str]) -> bool:
             return True
     return False
 
-def _expand_fmla(fmla: str) -> tuple[str, str, str]:
+def _expand_fmla(fmla: str, consts: list[str]) -> tuple[str, str, str]:
     output_index = parse(fmla)
-    if output_index in [5,8]: # a binary connective first order or propositional formula
-        lhs_fmla = lhs(fmla)
-        fmla_con = con(fmla)
-        rhs_fmla = rhs(fmla)
-        if fmla_con == '/\\':
-            return 'alpha', lhs_fmla, rhs_fmla
-        elif fmla_con == '\\/':
-            return 'beta', lhs_fmla, rhs_fmla
-        elif fmla_con == '=>':
-            return 'beta', f'~{lhs_fmla}', rhs_fmla
-    elif output_index in [2,7]: # a negation of FOL or propositional formula
+    if output_index in (2,7): # a negation of first order logic or propositional formula
         sub_fmla = fmla[1:]
         sub_fmla_output_index = parse(sub_fmla)
-        if sub_fmla_output_index in [2,7]:
+        if sub_fmla_output_index in (2,7):
             return 'alpha', sub_fmla[1:], ''
-        elif sub_fmla_output_index in [5,8]:
+        elif output_index == 3:
+            var = fmla[1]
+            try:
+                const = consts.pop(0)
+            except IndexError:
+                raise NoConstsException(f"Ran out of constants. (Max {MAX_CONSTANTS})")
+            new_fmla = fmla[2:]
+            for i, char in enumerate(new_fmla):
+                if char == var and new_fmla[i-1] not in ('A', 'E'):
+                    new_fmla[i] = const
+            return 'delta', f'~{new_fmla}', ''
+        elif output_index == 4:
+            pass
+        elif sub_fmla_output_index in (5,8):
             lhs_sub_fmla = lhs(sub_fmla)
             sub_fmla_con = con(sub_fmla)
             rhs_sub_fmla = rhs(sub_fmla)
@@ -192,6 +214,29 @@ def _expand_fmla(fmla: str) -> tuple[str, str, str]:
                 return 'alpha', lhs_sub_fmla, f'~{rhs_sub_fmla}'
             elif sub_fmla_con == '/\\':
                 return 'beta', f'~{lhs_sub_fmla}', f'~{rhs_sub_fmla}'
+    elif output_index == 3: # a universally quantified formula
+        pass
+    elif output_index == 4: # an existentially quantified formula
+        var = fmla[1]
+        try:
+            const = consts.pop(0)
+        except IndexError:
+            raise NoConstsException(f"Ran out of constants. (Max {MAX_CONSTANTS})")
+        new_fmla = fmla[2:]
+        for i, char in enumerate(new_fmla):
+            if char == var and new_fmla[i-1] not in ('A', 'E'):
+                new_fmla[i] = const
+        return 'delta', new_fmla, ''
+    elif output_index in (5,8): # a binary connective first order logic or propositional formula
+        lhs_fmla = lhs(fmla)
+        fmla_con = con(fmla)
+        rhs_fmla = rhs(fmla)
+        if fmla_con == '/\\':
+            return 'alpha', lhs_fmla, rhs_fmla
+        elif fmla_con == '\\/':
+            return 'beta', lhs_fmla, rhs_fmla
+        elif fmla_con == '=>':
+            return 'beta', f'~{lhs_fmla}', rhs_fmla
     return '', '', ''
 
 
