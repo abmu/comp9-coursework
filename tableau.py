@@ -192,6 +192,7 @@ def _expand_fmla(fmla: str, consts: list[str]) -> tuple[str, str, str]:
         if sub_fmla_output_index in (2,7):
             return 'alpha', sub_fmla[1:], ''
         elif output_index == 3:
+            ... FIX DELTA FORMULA EXPANSION WHEN THERE ARE DUPLICATE VARIABLES USED
             var = fmla[1]
             try:
                 const = consts.pop(0)
@@ -200,7 +201,7 @@ def _expand_fmla(fmla: str, consts: list[str]) -> tuple[str, str, str]:
             new_fmla = fmla[2:]
             for i, char in enumerate(new_fmla):
                 if char == var and new_fmla[i-1] not in ('A', 'E'):
-                    new_fmla[i] = const
+                    new_fmla = new_fmla[:i] + const + new_fmla[i+1:]
             return 'delta', f'~{new_fmla}', ''
         elif output_index == 4:
             pass
@@ -225,7 +226,7 @@ def _expand_fmla(fmla: str, consts: list[str]) -> tuple[str, str, str]:
         new_fmla = fmla[2:]
         for i, char in enumerate(new_fmla):
             if char == var and new_fmla[i-1] not in ('A', 'E'):
-                new_fmla[i] = const
+                new_fmla = new_fmla[:i] + const + new_fmla[i+1:]
         return 'delta', new_fmla, ''
     elif output_index in (5,8): # a binary connective first order logic or propositional formula
         lhs_fmla = lhs(fmla)
