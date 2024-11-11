@@ -115,9 +115,11 @@ def theory(fmla: str) -> list[str]:
 
 # Check for satisfiability - output 0 if not satisfiable, output 1 if satisfiable, output 2 if number of constants exceeds MAX_CONSTANTS
 def sat(tableau: list[list[str]]) -> int:
-    consts = CONSTS.copy()
+    delta_exp_consts = CONSTS.copy()
+    tableau_gamma_exp = [{} for _ in tableau]
     while tableau:
         theory = tableau.pop(0)
+        gamma_exp_count = tableau_gamma_exp.pop(0)
         if _is_expanded(theory) and not _is_contradictory(theory):
             return 1
         else:
@@ -128,7 +130,7 @@ def sat(tableau: list[list[str]]) -> int:
             if _is_literal(fmla):
                 continue
             try:
-                expansion_type, fmla_1, fmla_2 = _expand_fmla(fmla, consts, theory)
+                expansion_type, fmla_1, fmla_2 = _expand_fmla(fmla, delta_exp_consts, gamma_exp_count)
             except NoConstsException:
                 return 2
             match expansion_type:
@@ -140,23 +142,27 @@ def sat(tableau: list[list[str]]) -> int:
                         new_theory.append(fmla_2)
                     if not _is_contradictory(new_theory) and not _is_contained(new_theory, tableau):
                         tableau.append(new_theory)
+                        tableau_gamma_exp.append(gamma_exp_count.copy())
                 case 'beta':
                     new_theory_1 = theory.copy()
                     new_theory_1.remove(fmla)
                     new_theory_1.append(fmla_1)
                     if not _is_contradictory(new_theory_1) and not _is_contained(new_theory_1, tableau):
                         tableau.append(new_theory_1)
+                        tableau_gamma_exp.append(gamma_exp_count.copy())
                     new_theory_2 = theory.copy()
                     new_theory_2.remove(fmla)
                     new_theory_2.append(fmla_2)
                     if not _is_contradictory(new_theory_2) and not _is_contained(new_theory_2, tableau):
                         tableau.append(new_theory_2)
+                        tableau_gamma_exp.append(gamma_exp_count.copy())
                 case 'delta':
                     new_theory = theory.copy()
                     new_theory.remove(fmla)
                     new_theory.append(fmla_1)
                     if not _is_contradictory(new_theory) and not _is_contained(new_theory, tableau):
                         tableau.append(new_theory)
+                        tableau_gamma_exp.append(gamma_exp_count.copy())
                 case 'gamma':
                     new_theory = theory.copy()
                     new_theory.remove(fmla)
@@ -164,6 +170,7 @@ def sat(tableau: list[list[str]]) -> int:
                     new_theory.append(fmla) # keep gamma formula, but move it to the end of the list representation of the theory (fair schedule)
                     if not _is_contradictory(new_theory) and not _is_contained(new_theory, tableau):
                         tableau.append(new_theory)
+                        tableau_gamma_exp.append(gamma_exp_count.copy())
     return 0
 
 def _is_literal(fmla: str) -> bool:
@@ -217,28 +224,31 @@ def _replace_var(fmla: str, var: str, const: str) -> str:
                     ignore = False
     return new_fmla
 
-def _expand_fmla(fmla: str, consts: list[str], theory: list[str]) -> tuple[str, str, str]:
+def _expand_fmla(fmla: str, delta_exp_consts: list[str], gamma_exp_count: dict[str, int]) -> tuple[str, str, str]:
     output_index = parse(fmla)
     if output_index in (2,7): # a negation of first order logic or propositional formula
         sub_fmla = fmla[1:]
         sub_fmla_output_index = parse(sub_fmla)
         if sub_fmla_output_index in (2,7):
             return 'alpha', sub_fmla[1:], ''
-        elif output_index == 3:
-            var = fmla[1]
+        elif sub_fmla_output_index == 3:
+            var = sub_fmla[1]
             try:
-                const = consts.pop(0)
+                const = delta_exp_consts.pop(0)
             except IndexError:
                 raise NoConstsException(f'Error whilst expanding delta formula! Ran out of new constants. (Max {MAX_CONSTANTS})')
-            new_fmla = _replace_var(fmla, var, const)
+            new_fmla = _replace_var(sub_fmla, var, const)
             return 'delta', f'~{new_fmla}', ''
-        elif output_index == 4:
-            # var = fmla[1]
-            # for const in CONSTS:
-            #     new_fmla = _replace_var(fmla, var, const)
-            #     if new_fmla not in theory:
-            #         return 'gamma', f'~{new_fmla}', ''
-            # raise NoConstsException(f'Error whilst expanding gamma formula! Unable to try any more constants. (Max {MAX_CONSTANTS})')
+        elif sub_fmla_output_index == 4:
+            var = sub_fmla[1]
+            if fmla not in gamma_exp_count:
+                gamma_exp_count[fmla] = 0
+            if gamma_exp_count[fmla] >= 10:
+                raise NoConstsException(f'Error whilst expanding gamma formula! Unable to try any more constants. (Max {MAX_CONSTANTS})')
+            const = CONSTS[gamma_exp_count[fmla]]
+            gamma_exp_count[fmla] += 1
+            new_fmla = _replace_var(sub_fmla, var, const)
+            return 'gamma', f'~{new_fmla}', ''
         elif sub_fmla_output_index in (5,8):
             lhs_sub_fmla = lhs(sub_fmla)
             sub_fmla_con = con(sub_fmla)
@@ -250,16 +260,19 @@ def _expand_fmla(fmla: str, consts: list[str], theory: list[str]) -> tuple[str, 
             elif sub_fmla_con == '/\\':
                 return 'beta', f'~{lhs_sub_fmla}', f'~{rhs_sub_fmla}'
     elif output_index == 3: # a universally quantified formula
-        # var = fmla[1]
-        # for const in CONSTS:
-        #     new_fmla = _replace_var(fmla, var, const)
-        #     if new_fmla not in theory:
-        #         return 'gamma', new_fmla, ''
-        # raise NoConstsException(f'Error whilst expanding gamma formula! Unable to try any more constants. (Max {MAX_CONSTANTS})')
+        var = fmla[1]
+        if fmla not in gamma_exp_count:
+            gamma_exp_count[fmla] = 0
+        if gamma_exp_count[fmla] >= 10:
+            raise NoConstsException(f'Error whilst expanding gamma formula! Unable to try any more constants. (Max {MAX_CONSTANTS})')
+        const = CONSTS[gamma_exp_count[fmla]]
+        gamma_exp_count[fmla] += 1
+        new_fmla = _replace_var(fmla, var, const)
+        return 'gamma', new_fmla, ''
     elif output_index == 4: # an existentially quantified formula
         var = fmla[1]
         try:
-            const = consts.pop(0)
+            const = delta_exp_consts.pop(0)
         except IndexError:
             raise NoConstsException(f'Error whilst expanding delta formula! Ran out of new constants. (Max {MAX_CONSTANTS})')
         new_fmla = _replace_var(fmla, var, const)
