@@ -115,12 +115,12 @@ def theory(fmla: str) -> list[str]:
 
 # Check for satisfiability - output 0 if not satisfiable, output 1 if satisfiable, output 2 if number of constants exceeds MAX_CONSTANTS
 def sat(tableau: list[list[str]]) -> int:
-    delta_exp_consts = CONSTS.copy()
+    delta_exp_count = 0
     tableau_gamma_exp = [{} for _ in tableau]
     while tableau:
         theory = tableau.pop(0)
         gamma_exp_count = tableau_gamma_exp.pop(0)
-        if _is_expanded(theory) and not _is_contradictory(theory):
+        if _is_expanded(theory, delta_exp_count, gamma_exp_count) and not _is_contradictory(theory):
             return 1
         else:
             # Pick non-literal formula in theory
@@ -130,7 +130,7 @@ def sat(tableau: list[list[str]]) -> int:
             if _is_literal(fmla):
                 continue
             try:
-                expansion_type, fmla_1, fmla_2 = _expand_fmla(fmla, delta_exp_consts, gamma_exp_count)
+                expansion_type, fmla_1, fmla_2, delta_exp_count = _expand_fmla(fmla, delta_exp_count, gamma_exp_count)
             except NoConstsException:
                 return 2
             match expansion_type:
@@ -183,9 +183,22 @@ def _is_literal(fmla: str) -> bool:
         return sub_fmla_output_index in (1,6)
     return False
 
-def _is_expanded(theory: list[str]) -> bool:
+def _is_gamma(fmla: str) -> bool:
+    output_index = parse(fmla)
+    if output_index == 3: # a universally quantified formula
+        return True
+    elif output_index == 2: # a negation of first order logic
+        sub_fmla = fmla[1:]
+        sub_fmla_output_index = parse(sub_fmla)
+        return sub_fmla_output_index == 4 # an existentially quantified formula
+    return False
+
+def _is_expanded(theory: list[str], delta_exp_count: int, gamma_exp_count: dict[str, int]) -> bool:
     for fmla in theory:
         if not _is_literal(fmla):
+            if _is_gamma(fmla):
+                if fmla in gamma_exp_count and gamma_exp_count[fmla] >= delta_exp_count:
+                    continue
             return False
     return True
 
@@ -224,70 +237,70 @@ def _replace_var(fmla: str, var: str, const: str) -> str:
                     ignore = False
     return new_fmla
 
-def _expand_fmla(fmla: str, delta_exp_consts: list[str], gamma_exp_count: dict[str, int]) -> tuple[str, str, str]:
+def _expand_fmla(fmla: str, delta_exp_count: int, gamma_exp_count: dict[str, int]) -> tuple[str, str, str, int]:
     output_index = parse(fmla)
     if output_index in (2,7): # a negation of first order logic or propositional formula
         sub_fmla = fmla[1:]
         sub_fmla_output_index = parse(sub_fmla)
         if sub_fmla_output_index in (2,7):
-            return 'alpha', sub_fmla[1:], ''
+            return 'alpha', sub_fmla[1:], '', delta_exp_count
         elif sub_fmla_output_index == 3:
             var = sub_fmla[1]
-            try:
-                const = delta_exp_consts.pop(0)
-            except IndexError:
+            if delta_exp_count >= MAX_CONSTANTS:
                 raise NoConstsException(f'Error whilst expanding delta formula! Ran out of new constants. (Max {MAX_CONSTANTS})')
+            const = CONSTS[delta_exp_count]
+            delta_exp_count += 1
             new_fmla = _replace_var(sub_fmla, var, const)
-            return 'delta', f'~{new_fmla}', ''
+            return 'delta', f'~{new_fmla}', '', delta_exp_count
         elif sub_fmla_output_index == 4:
             var = sub_fmla[1]
             if fmla not in gamma_exp_count:
                 gamma_exp_count[fmla] = 0
-            if gamma_exp_count[fmla] >= 10:
+            if gamma_exp_count[fmla] >= MAX_CONSTANTS:
                 raise NoConstsException(f'Error whilst expanding gamma formula! Unable to try any more constants. (Max {MAX_CONSTANTS})')
             const = CONSTS[gamma_exp_count[fmla]]
             gamma_exp_count[fmla] += 1
             new_fmla = _replace_var(sub_fmla, var, const)
-            return 'gamma', f'~{new_fmla}', ''
+            return 'gamma', f'~{new_fmla}', '', delta_exp_count
         elif sub_fmla_output_index in (5,8):
             lhs_sub_fmla = lhs(sub_fmla)
             sub_fmla_con = con(sub_fmla)
             rhs_sub_fmla = rhs(sub_fmla)
             if sub_fmla_con == '\\/':
-                return 'alpha', f'~{lhs_sub_fmla}', f'~{rhs_sub_fmla}'
+                return 'alpha', f'~{lhs_sub_fmla}', f'~{rhs_sub_fmla}', delta_exp_count
             elif sub_fmla_con == '=>':
-                return 'alpha', lhs_sub_fmla, f'~{rhs_sub_fmla}'
+                return 'alpha', lhs_sub_fmla, f'~{rhs_sub_fmla}', delta_exp_count
             elif sub_fmla_con == '/\\':
-                return 'beta', f'~{lhs_sub_fmla}', f'~{rhs_sub_fmla}'
+                return 'beta', f'~{lhs_sub_fmla}', f'~{rhs_sub_fmla}', delta_exp_count
     elif output_index == 3: # a universally quantified formula
         var = fmla[1]
         if fmla not in gamma_exp_count:
             gamma_exp_count[fmla] = 0
-        if gamma_exp_count[fmla] >= 10:
+        if gamma_exp_count[fmla] >= MAX_CONSTANTS:
             raise NoConstsException(f'Error whilst expanding gamma formula! Unable to try any more constants. (Max {MAX_CONSTANTS})')
         const = CONSTS[gamma_exp_count[fmla]]
         gamma_exp_count[fmla] += 1
         new_fmla = _replace_var(fmla, var, const)
-        return 'gamma', new_fmla, ''
+        return 'gamma', new_fmla, '', delta_exp_count
     elif output_index == 4: # an existentially quantified formula
         var = fmla[1]
-        try:
-            const = delta_exp_consts.pop(0)
-        except IndexError:
+        if delta_exp_count >= MAX_CONSTANTS:
             raise NoConstsException(f'Error whilst expanding delta formula! Ran out of new constants. (Max {MAX_CONSTANTS})')
+        const = CONSTS[delta_exp_count]
+        delta_exp_count += 1
         new_fmla = _replace_var(fmla, var, const)
-        return 'delta', new_fmla, ''
+        return 'delta', new_fmla, '', delta_exp_count
     elif output_index in (5,8): # a binary connective first order logic or propositional formula
         lhs_fmla = lhs(fmla)
         fmla_con = con(fmla)
         rhs_fmla = rhs(fmla)
         if fmla_con == '/\\':
-            return 'alpha', lhs_fmla, rhs_fmla
+            return 'alpha', lhs_fmla, rhs_fmla, delta_exp_count
         elif fmla_con == '\\/':
-            return 'beta', lhs_fmla, rhs_fmla
+            return 'beta', lhs_fmla, rhs_fmla, delta_exp_count
         elif fmla_con == '=>':
-            return 'beta', f'~{lhs_fmla}', rhs_fmla
-    return '', '', ''
+            return 'beta', f'~{lhs_fmla}', rhs_fmla, delta_exp_count
+    return '', '', '', delta_exp_count
 
 
 #------------------------------------------------------------------------------------------------------------------------------:
