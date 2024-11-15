@@ -67,9 +67,8 @@ def parse(fmla: str) -> int:
                         return 8
                     return 0
         return 0
-    else :
-        # not a formula
-        return 0
+    # not a formula
+    return 0
 
 # Return the LHS of a binary connective formula
 def lhs(fmla: str) -> str:
@@ -138,44 +137,43 @@ def sat(tableau: list[list[str]]) -> int:
                 expansion_type, fmla_1, fmla_2, delta_exp_count = _expand_fmla(fmla, delta_exp_count, gamma_exp_count)
             except NoConstsException:
                 return 2
-            match expansion_type:
-                case 'alpha':
-                    new_theory = theory.copy()
-                    new_theory.remove(fmla)
-                    new_theory.append(fmla_1)
-                    if fmla_2 != '':
-                        new_theory.append(fmla_2)
-                    if not _is_contradictory(new_theory) and not _is_contained(new_theory, tableau):
-                        tableau.append(new_theory)
-                        tableau_gamma_exp.append(gamma_exp_count.copy())
-                case 'beta':
-                    new_theory_1 = theory.copy()
-                    new_theory_1.remove(fmla)
-                    new_theory_1.append(fmla_1)
-                    if not _is_contradictory(new_theory_1) and not _is_contained(new_theory_1, tableau):
-                        tableau.append(new_theory_1)
-                        tableau_gamma_exp.append(gamma_exp_count.copy())
-                    new_theory_2 = theory.copy()
-                    new_theory_2.remove(fmla)
-                    new_theory_2.append(fmla_2)
-                    if not _is_contradictory(new_theory_2) and not _is_contained(new_theory_2, tableau):
-                        tableau.append(new_theory_2)
-                        tableau_gamma_exp.append(gamma_exp_count.copy())
-                case 'delta':
-                    new_theory = theory.copy()
-                    new_theory.remove(fmla)
-                    new_theory.append(fmla_1)
-                    if not _is_contradictory(new_theory) and not _is_contained(new_theory, tableau):
-                        tableau.append(new_theory)
-                        tableau_gamma_exp.append(gamma_exp_count.copy())
-                case 'gamma':
-                    new_theory = theory.copy()
-                    new_theory.remove(fmla)
-                    new_theory.append(fmla_1)
-                    new_theory.append(fmla) # keep gamma formula, but move it to the end of the list representation of the theory (fair schedule)
-                    if not _is_contradictory(new_theory) and not _is_contained(new_theory, tableau):
-                        tableau.append(new_theory)
-                        tableau_gamma_exp.append(gamma_exp_count.copy())
+            if expansion_type == 'alpha':
+                new_theory = theory.copy()
+                new_theory.remove(fmla)
+                new_theory.append(fmla_1)
+                if fmla_2 != '':
+                    new_theory.append(fmla_2)
+                if not _is_contradictory(new_theory) and not _is_contained(new_theory, tableau):
+                    tableau.append(new_theory)
+                    tableau_gamma_exp.append(gamma_exp_count.copy())
+            elif expansion_type == 'beta':
+                new_theory_1 = theory.copy()
+                new_theory_1.remove(fmla)
+                new_theory_1.append(fmla_1)
+                if not _is_contradictory(new_theory_1) and not _is_contained(new_theory_1, tableau):
+                    tableau.append(new_theory_1)
+                    tableau_gamma_exp.append(gamma_exp_count.copy())
+                new_theory_2 = theory.copy()
+                new_theory_2.remove(fmla)
+                new_theory_2.append(fmla_2)
+                if not _is_contradictory(new_theory_2) and not _is_contained(new_theory_2, tableau):
+                    tableau.append(new_theory_2)
+                    tableau_gamma_exp.append(gamma_exp_count.copy())
+            elif expansion_type == 'delta':
+                new_theory = theory.copy()
+                new_theory.remove(fmla)
+                new_theory.append(fmla_1)
+                if not _is_contradictory(new_theory) and not _is_contained(new_theory, tableau):
+                    tableau.append(new_theory)
+                    tableau_gamma_exp.append(gamma_exp_count.copy())
+            elif expansion_type == 'gamma':
+                new_theory = theory.copy()
+                new_theory.remove(fmla)
+                new_theory.append(fmla_1)
+                new_theory.append(fmla) # keep gamma formula, but move it to the end of the list representation of the theory (fair schedule)
+                if not _is_contradictory(new_theory) and not _is_contained(new_theory, tableau):
+                    tableau.append(new_theory)
+                    tableau_gamma_exp.append(gamma_exp_count.copy())
     return 0
 
 def _is_literal(fmla: str) -> bool:
