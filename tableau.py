@@ -8,63 +8,68 @@ class NoConstsException(Exception):
 # Index 1-5 first order logic formula
 # Index 6-8 propositional formula
 def parse(fmla: str) -> int:
-    match list(fmla):
-        case [('P' | 'Q' | 'R' | 'S'), '(', x, ',', y, ')'] if x in {'x', 'y', 'z', 'w'} | set(CONSTS) and y in {'x', 'y', 'z', 'w'} | set(CONSTS):
-            # an atom
-            return 1
-        case [('p' | 'q' | 'r' | 's')]:
-            # a proposition
-            return 6
-        case ['~', *chars]:
-            # a negation of a first order logic or propositional formula
-            sub_fmla = ''.join(chars)
-            sub_fmla_output_index = parse(sub_fmla)
-            if 1 <= sub_fmla_output_index <= 5:
-                # a negation of a first order logic formula
-                return 2
-            elif 6 <= sub_fmla_output_index <= 8:
-                # a negation of a propositional formula
-                return 7
-            return 0
-        case ['A', ('x' | 'y' | 'z' | 'w'), *chars]:
-            # a universally quantified formula
-            sub_fmla = ''.join(chars)
-            sub_fmla_output_index = parse(sub_fmla)
-            if 1 <= sub_fmla_output_index <= 5:
-                return 3
-            return 0
-        case ['E', ('x' | 'y' | 'z' | 'w'), *chars]:
-            # an existentially quantified formula
-            sub_fmla = ''.join(chars)
-            sub_fmla_output_index = parse(sub_fmla)
-            if 1 <= sub_fmla_output_index <= 5:
-                return 4
-            return 0
-        case ['(', *chars, ')']:
-            # a binary connective first order logic or propositional formula
-            depth = 1
-            for i, char in enumerate(chars):
-                if char == '(':
-                    depth += 1
-                elif char == ')':
-                    depth -= 1
-                if depth == 1:
-                    if i + 2 < len(chars) and chars[i:i+2] in (['/','\\'], ['\\','/'], ['=','>']):
-                        lhs_fmla = ''.join(chars[:i])
-                        lhs_fmla_output_index = parse(lhs_fmla)
-                        rhs_fmla = ''.join(chars[i+2:])
-                        rhs_fmla_output_index = parse(rhs_fmla)
-                        if 1 <= lhs_fmla_output_index <= 5 and 1 <= rhs_fmla_output_index <= 5:
-                            # a binary connective first order logic formula
-                            return 5
-                        if 6 <= lhs_fmla_output_index <= 8 and 6 <= rhs_fmla_output_index <= 8:
-                            # a binary connective propositional formula
-                            return 8
-                        return 0
-            return 0
-        case _:
-            # not a formula
-            return 0
+    fmla_chars = list(fmla)
+    preds = {'P', 'Q', 'R', 'S'}
+    vars = {'x', 'y', 'z', 'w'}
+    consts = set(CONSTS)
+    props = {'p', 'q', 'r', 's'}
+    if len(fmla_chars) == 6 and fmla_chars[0] in preds and fmla_chars[1] == '(' and fmla[2] in vars | consts and fmla[3] == ',' and fmla[4] in vars | consts and fmla[5] == ')':
+        # an atom
+        return 1
+    elif len(fmla_chars) == 1 and fmla_chars[0] in props:
+        # a proposition
+        return 6
+    elif len(fmla_chars) > 1 and fmla_chars[0] == '~':
+        # a negation of a first order logic or propositional formula
+        sub_fmla = ''.join(fmla_chars[1:])
+        sub_fmla_output_index = parse(sub_fmla)
+        if 1 <= sub_fmla_output_index <= 5:
+            # a negation of a first order logic formula
+            return 2
+        elif 6 <= sub_fmla_output_index <= 8:
+            # a negation of a propositional formula
+            return 7
+        return 0
+    elif len(fmla_chars) > 2 and fmla_chars[0] == 'A' and fmla_chars[1] in vars:
+        # a universally quantified formula
+        sub_fmla = ''.join(fmla_chars[2:])
+        sub_fmla_output_index = parse(sub_fmla)
+        if 1 <= sub_fmla_output_index <= 5:
+            return 3
+        return 0
+    elif len(fmla_chars) > 2 and fmla_chars[0] == 'E' and fmla_chars[1] in vars:
+        # an existentially quantified formula
+        sub_fmla = ''.join(fmla_chars[2:])
+        sub_fmla_output_index = parse(sub_fmla)
+        if 1 <= sub_fmla_output_index <= 5:
+            return 4
+        return 0
+    elif len(fmla_chars) > 2 and fmla_chars[0] == '(' and fmla_chars[-1] == ')':
+        # a binary connective first order logic or propositional formula
+        chars = fmla_chars[1:-1]
+        depth = 1
+        for i, char in enumerate(chars):
+            if char == '(':
+                depth += 1
+            elif char == ')':
+                depth -= 1
+            if depth == 1:
+                if i + 2 < len(chars) and chars[i:i+2] in (['/','\\'], ['\\','/'], ['=','>']):
+                    lhs_fmla = ''.join(chars[:i])
+                    lhs_fmla_output_index = parse(lhs_fmla)
+                    rhs_fmla = ''.join(chars[i+2:])
+                    rhs_fmla_output_index = parse(rhs_fmla)
+                    if 1 <= lhs_fmla_output_index <= 5 and 1 <= rhs_fmla_output_index <= 5:
+                        # a binary connective first order logic formula
+                        return 5
+                    if 6 <= lhs_fmla_output_index <= 8 and 6 <= rhs_fmla_output_index <= 8:
+                        # a binary connective propositional formula
+                        return 8
+                    return 0
+        return 0
+    else :
+        # not a formula
+        return 0
 
 # Return the LHS of a binary connective formula
 def lhs(fmla: str) -> str:
